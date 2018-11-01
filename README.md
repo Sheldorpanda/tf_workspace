@@ -5,7 +5,8 @@ Tensorflow workspace for indicator learning project
 
 **sensor_data:**
 
-raw_data:
+**raw_data:**
+
 Raw .mat data directly collected from PreScan in the same scenario. For detailed explaination, please refer to the sensor section in PreScan manual: https://virginia.app.box.com/s/gzb8r2dwc78r4336ntpccm0f1m5qw05r
 
 
