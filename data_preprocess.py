@@ -1,57 +1,47 @@
 import numpy as np
+import pandas as pd
+import os
+from PIL import Image
 
-# Slice time domain input data into chunks, fft into frequency domain
-def data_process(raw_datafile, dir_raw, stride):
-    data = np.genfromtxt(dir_raw + raw_datafile, delimiter=',')
-    n = len(data) // stride
-    l = []
+# (pixel_0_r, pixel_0_g, pixel_0_b, pixel_1_r, ...)
+def convert_image(img_file):
+    img = Image.open(img_file)
+    img_pixels = img.convert("RGB")
+    img_array = np.array(img_pixels.getdata()).flatten()
+    return img_array
+
+# shape = (num_imgs, pixels*3)
+def convert_all_images(dir):
+    imgs = os.listdir(dir)
+    result = []
+    for file_name in imgs:
+        if not file_name.endswith('.png'):
+            continue
+        print("Converting " + file_name + " ...")
+        img_file = dir + file_name
+        a = convert_image(img_file)
+        result.append(a)
+    return np.array(result)
+
+# shape = (num_intervals, step*2, pixels*3) = (tau, 2f, n)
+def transform(array, step=20):
+    n = array.shape[0] // step
+    result = []
     for i in range(n):
-        data_batch = data[i * stride : (i+1) * stride]
-        data_f = np.fft.fft(data_batch, axis=0)
-        l.append(data_f)
-    l = np.concatenate(l)
-    return l
+        sub_array = array[i : i + step]
+        f = np.fft.fft(sub_array, axis=0)
+        r = np.real(f)
+        i = np.imag(f)
+        result.append(np.concatenate((r, i), axis=0))
+    return np.array(result)
 
-# Label averaged for each tensor
-def label_process(raw_label_datafile, dir_label, stride):
-    labels = np.genfromtxt(dir_label + raw_label_datafile, delimiter=',')
-    n = len(labels) // stride # num batches
-    m = len(labels[0]) # dim
-    l = []
-    for i in range(n):
-        label_batch = []
-        chunk = labels[i * stride: (i + 1) * stride]
-        for j in range(m):
-            chunk_dim = [entry[j] for entry in chunk]
-            label_batch.append([np.average(chunk_dim)] * stride)
-        label_batch = np.dstack(label_batch).squeeze()
-        l.append(label_batch)
-    l = np.concatenate(l)
-    return l
+dir =  "sensor_data/LCA_Real_Life_Highway__511 sec/LCA_Real-Life_Highway_1_Ford_Fiesta_1/"
+# img_dir = "CameraSensor_1/"
+# r = convert_all_images(dir + img_dir)
+# f = transform(r)
 
-# API for deepSense
-def preprocess(raw_data_files, raw_label_file, processed_file_name, dir_raw, dir_label, stride=16):
-    l = [data_process(raw_data_file, dir_raw, stride=stride) for raw_data_file in raw_data_files]
-    # Check calibration among data, can be optimized to O(nlogn)
-    for i in range(len(l)):
-        for j in range(len(l)):
-            if l[i].shape[0] != l[j].shape[0]:
-                raise Exception('Data not calibrated')
-    labels = label_process(raw_label_file, dir_label, stride=stride)
-    # Check calibration with labels
-    if l[0].shape[0] != labels.shape[0]:
-        raise Exception('Data and label not calibrated')
-    l.append(labels)
-    # Write to a new file for DeepSense
-    processed_file = DIR_PROCESSED + processed_file_name
-    processed_data = np.dstack(np.concatenate(l, axis=1)).squeeze().transpose()
-    np.savetxt(processed_file, processed_data, delimiter=',')
-    print('Preprocession finished')
-    return stride
-
-
-raw_data_files = ['rel_angle.csv']
-raw_label_file = 'curr_state.csv'
-preprocess(raw_data_files, raw_label_file, 16)
-
-
+# May take very long time on PC, use larger GPUs
+# i = 0
+# for arr in f:
+#     pd.DataFrame(arr).to_csv(dir + "img_processed_" + str(i) + ".csv")
+#     i += 1
